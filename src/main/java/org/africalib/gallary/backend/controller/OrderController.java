@@ -3,32 +3,30 @@ package org.africalib.gallary.backend.controller;
 import java.util.List;
 
 import org.africalib.gallary.backend.dto.OrderDto;
-import org.africalib.gallary.backend.entity.Cart;
-import org.africalib.gallary.backend.entity.Item;
 import org.africalib.gallary.backend.entity.Order;
 import org.africalib.gallary.backend.repository.CartRepository;
-import org.africalib.gallary.backend.repository.ItemRepository;
 import org.africalib.gallary.backend.repository.OrderRepository;
 import org.africalib.gallary.backend.service.JwtService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import lombok.Getter;
+import jakarta.transaction.Transactional;
 
 @RestController
 public class OrderController {
 
     @Autowired
     JwtService jwtService;
+
+    @Autowired
+    CartRepository cartRepository;
 
     @Autowired
     OrderRepository orderRepository;
@@ -40,12 +38,14 @@ public class OrderController {
         if (!jwtService.isValid(token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
+        int memberId = jwtService.getId(token);
 
-        List<Order> orders = orderRepository.findAll();
+        List<Order> orders = orderRepository.findByMemberIdOrderByIdDesc(memberId);
 
         return new ResponseEntity<>(orders, HttpStatus.OK);
     }
 
+    @Transactional
     @PostMapping("/api/orders")
     public ResponseEntity pushOrder(
             @RequestBody OrderDto dto,
@@ -55,8 +55,10 @@ public class OrderController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
 
+        int memberId = jwtService.getId(token);
+
         Order newOrder = new Order();
-        newOrder.setMemberId(jwtService.getId(token));
+        newOrder.setMemberId(memberId);
         newOrder.setName(dto.getName());
         newOrder.setAddress(dto.getAddress());
         newOrder.setPayment(dto.getPayment());
@@ -64,6 +66,8 @@ public class OrderController {
         newOrder.setItems(dto.getItems());
 
         orderRepository.save(newOrder);
+
+        cartRepository.deleteByMemberId(memberId);
 
         return new ResponseEntity<>(HttpStatus.OK);
     }
